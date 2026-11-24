@@ -1,0 +1,26 @@
+name = "LinearPMap"
+version = "0.1.0"
+defaultTargets = ["LinearPMap"]
+lintDriver = "batteries/runLinter"
+
+[leanOptions]
+pp.unicode.fun = true
+autoImplicit = false
+relaxedAutoImplicit = false
+maxSynthPendingDepth = 3
+weak.linter.flexible = true
+weak.linter.mathlibStandardSet = true
+warn.sorry = true
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "master-2026-11-23"
+
+[[require]]
+name = "axiom-audit"
+git = "https://github.com/leanprover-community/axiom-audit.git"
+rev = "main"
+
+[[lean_lib]]
+name = "LinearPMap"

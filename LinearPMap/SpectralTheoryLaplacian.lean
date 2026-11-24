@@ -1,0 +1,340 @@
+/-
+Copyright (c) 2026 Moritz Doll. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Moritz Doll
+-/
+module
+
+public import LinearPMap.BesselPotentialSpace
+public import LinearPMap.Concrete
+public import LinearPMap.Analysis.Distribution.SchwartzSpace.Deriv
+public import LinearPMap.Analysis.Distribution.FourierMultiplier
+public import LinearPMap.Analysis.Distribution.TemperedDistribution
+public import Mathlib.Analysis.Calculus.ContDiff.Operations
+public import Mathlib.Analysis.Calculus.ContDiff.RestrictScalars
+
+import all Mathlib.Analysis.FunctionalSpaces.BesselPotentialSpace
+
+/-! # Spectral theory of the Laplacian
+
+We prove that the Laplacian is a self-adjoint operator on `L2`.
+
+-/
+
+@[expose] public noncomputable section
+
+variable {𝕜 𝕜' E F : Type*}
+
+section iteratedFDeriv
+
+variable [NontriviallyNormedField 𝕜] [NontriviallyNormedField 𝕜'] [NormedAlgebra 𝕜 𝕜']
+  [NormedAddCommGroup E] [NormedSpace 𝕜 E] [NormedSpace 𝕜' E]
+  [IsScalarTower 𝕜 𝕜' E]
+
+theorem norm_iteratedFDeriv_eq_norm_iter_deriv (f : 𝕜' → E) (n : ℕ) (x : 𝕜')
+    (hf : ContDiffAt 𝕜' n f x) :
+    ‖iteratedFDeriv 𝕜 n f x‖ = ‖deriv^[n] f x‖ := by
+  rw [← iteratedDeriv_eq_iterate, ← hf.restrictScalars_iteratedFDeriv]
+  simp only [Function.comp_apply, ContinuousMultilinearMap.norm_restrictScalars]
+  exact norm_iteratedFDeriv_eq_norm_iteratedDeriv
+
+end iteratedFDeriv
+
+
+variable [NormedAddCommGroup E] [NormedAddCommGroup F]
+  [InnerProductSpace ℝ E] [InnerProductSpace ℂ F]
+  [FiniteDimensional ℝ E] [MeasurableSpace E] [BorelSpace E]
+  [CompleteSpace F]
+
+open scoped InnerProductSpace LinearPMap BesselPotentialSpace
+
+open MeasureTheory
+
+variable {s : ℝ}
+
+variable (f : H^{s}(E, F))
+
+attribute [fun_prop] Function.Injective BesselPotentialSpace.mono_injective
+
+variable (E F) in
+/-- The Laplacian as a unbounded operator. -/
+def ConcreteLinearPMap.laplacian :
+    ConcreteLinearPMap (RingHom.id ℂ) H^{2}(E, F) (Lp (α := E) F 2) (Lp (α := E) F 2) where
+  toFun := BesselPotentialSpace.toLpₗ E F (2 - 2) 2 ∘ₗ BesselPotentialSpace.laplacian E F 2
+  emb := BesselPotentialSpace.toLpₗ E F 0 2 ∘ₗ BesselPotentialSpace.mono E F 2 0
+  inj := by
+    simp only [LinearMap.coe_comp, ContinuousLinearMap.coe_coe]
+    rw [Function.Injective.of_comp_iff]
+    · fun_prop (disch := grind)
+    · convert (BesselPotentialSpace.toLpₗᵢ E F 0 2).injective
+      ext; simp
+
+open scoped SchwartzMap Laplacian FourierTransform
+
+@[fun_prop]
+theorem ConcreteLinearPMap.continuous_laplacian_toFun :
+    Continuous (ConcreteLinearPMap.laplacian E F).toFun := by
+  simp only [ConcreteLinearPMap.laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe]
+  fun_prop
+
+@[fun_prop]
+theorem ConcreteLinearPMap.continuous_laplacian_emb :
+    Continuous (ConcreteLinearPMap.laplacian E F).emb := by
+  simp only [ConcreteLinearPMap.laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe]
+  fun_prop
+
+@[simp]
+theorem ConcreteLinearPMap.laplacian_toFun_toBesselPotentialSpace (f : 𝓢(E, F)) :
+    (ConcreteLinearPMap.laplacian E F).toFun (f.toBesselPotentialSpace E F 2 2) = (Δ f).toLp 2 := by
+  simp only [ConcreteLinearPMap.laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe,
+    Function.comp_apply, BesselPotentialSpace.laplacian_apply,
+    ← f.toBesselPotentialSpace_laplacian, BesselPotentialSpace.toLpₗ_apply]
+  rw [(Δ f : 𝓢(E, F)).toBesselPotentialSpace_eq_toLp_of_eq_zero (by simp)]
+
+@[simp]
+theorem ConcreteLinearPMap.laplacian_emb_toBesselPotentialSpace (f : 𝓢(E, F)) :
+    (ConcreteLinearPMap.laplacian E F).emb (f.toBesselPotentialSpace E F 2 2) = f.toLp 2 := by
+  simp only [laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe, Function.comp_apply,
+    BesselPotentialSpace.toLpₗ_apply]
+  rw [f.toBesselPotentialSpace_mono _ _ (by simp), f.toBesselPotentialSpace_eq_toLp_of_eq_zero rfl]
+
+@[simp]
+theorem ConcreteLinearPMap.toTemperedDistribution_laplacian_toFun (f : H^{2}(E, F)) :
+    Lp.toTemperedDistribution ((ConcreteLinearPMap.laplacian E F).toFun f) = Δ f.toDistr := by
+  simp only [laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe, Function.comp_apply,
+    BesselPotentialSpace.laplacian_apply, BesselPotentialSpace.toLpₗ_apply]
+  rw [BesselPotentialSpace.toLp_eq_toDistr_of_eq_zero (by simp)]
+  simp
+
+@[simp]
+theorem ConcreteLinearPMap.toTemperedDistribution_laplacian_emb (f : H^{2}(E, F)) :
+    Lp.toTemperedDistribution ((ConcreteLinearPMap.laplacian E F).emb f) = f.toDistr := by
+  simp only [laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe, Function.comp_apply,
+    BesselPotentialSpace.toLpₗ_apply]
+  rw [BesselPotentialSpace.toLp_eq_toDistr_of_eq_zero (by simp)]
+  apply BesselPotentialSpace.toDistr_mono (by simp)
+
+variable (E F) in
+/-- The Laplacian as a unbounded operator. -/
+def LinearPMap.laplacian : Lp (α := E) F 2 →ₗ.[ℂ] Lp (α := E) F 2 :=
+  (ConcreteLinearPMap.laplacian E F).toLinearPMap
+
+/-- The Laplacian on `ℝ^n` is symmetric. -/
+theorem LinearPMap.isSymmetric_laplacian : IsSymmetric (LinearPMap.laplacian E F) := by
+  apply ConcreteLinearPMap.isSymmetric_toLinearPMap
+  intro x y
+  induction x, y using
+      (SchwartzMap.denseRange_toBesselPotentialSpace E F 2 (p := 2) (by simp)).induction_on₂
+    with
+  | hp =>
+    exact isClosed_eq (by fun_prop) (by fun_prop)
+  | h f g =>
+    simpa using (SchwartzMap.integral_inner_laplacian_right_eq_left f g).symm
+
+theorem ConcreteLinearPMap.denseRange_laplacian :
+    DenseRange (ConcreteLinearPMap.laplacian E F).emb := by
+  simp only [laplacian, LinearMap.coe_comp, ContinuousLinearMap.coe_coe]
+  have : Function.Surjective (BesselPotentialSpace.toLpₗ E F 0 2) :=
+    BesselPotentialSpace.toLpₗᵢ E F 0 2 |>.surjective
+  fun_prop (disch := grind)
+
+theorem Complex.iteratedDeriv_cpow_const (z : ℂ) (hz : z ∈ slitPlane) (k : ℕ) (r : ℂ) :
+    deriv^[k] (fun x : ℂ ↦ x ^ r) z = Polynomial.eval r (descPochhammer ℂ k) * z ^ (r - ↑k) := by
+  suffices Set.EqOn (deriv^[k] (fun x : ℂ ↦ x ^ r))
+      (fun z ↦ Polynomial.eval r (descPochhammer ℂ k) * z ^ (r - ↑k)) slitPlane from this hz
+  induction k with
+  | zero =>
+    intro z hz
+    simp
+  | succ k IH =>
+    intro z hz
+    simp only [Function.iterate_succ', Function.comp_apply, Nat.cast_add, Nat.cast_one]
+    have : deriv (deriv^[k] fun x ↦ x ^ r) z =
+        deriv (fun z ↦ Polynomial.eval r (descPochhammer ℂ k) * z ^ (r - k)) z := by
+      refine Filter.EventuallyEq.deriv_eq ?_
+      rw [Filter.eventuallyEq_iff_exists_mem]
+      use slitPlane
+      rw [← Complex.isOpen_slitPlane.mem_nhds_iff] at hz
+      simp [IH, hz]
+    simp [this, Complex.deriv_cpow_const hz, descPochhammer_succ_right]
+    grind only
+
+theorem Complex.iteratedDeriv_inv (z : ℂ) (hz : z ∈ slitPlane) (k : ℕ) :
+    deriv^[k] (fun x : ℂ ↦ x⁻¹) z =
+      Polynomial.eval (-1) (descPochhammer ℂ k) * z ^ (- 1 - (k : ℂ)) := by
+  simp_rw [← cpow_neg_one, Complex.iteratedDeriv_cpow_const z hz]
+
+open scoped ContDiff
+
+@[fun_prop]
+theorem hasTemperateGrowth_const_smul_I_inv (c : ℝ) (hc : c ≠ 0 := by positivity) :
+    Function.HasTemperateGrowth fun x : ℝ ↦ (c • Complex.I + x)⁻¹ := by
+  set t := { z : ℂ | |c| / 2 < |z.im| }
+  have ht_unique : UniqueDiffOn ℝ t := (isOpen_lt (by fun_prop) (by fun_prop)).uniqueDiffOn
+  have ht_subset : t ⊆ Complex.slitPlane := by
+    intro x hx
+    rw [Complex.mem_slitPlane_iff]
+    right
+    simp [t] at hx
+    grind
+  have ht : ContDiffOn ℝ ∞ Inv.inv t := by
+    suffices t ⊆ {0}ᶜ from (contDiffOn_inv ℝ).mono this
+    grw [ht_subset]
+    simp
+  apply Function.HasTemperateGrowth.comp' (t := t) (f := fun x : ℝ ↦ c • Complex.I + x) _ _ _ _
+    (by fun_prop)
+  · intro z
+    simp only [Complex.real_smul, Set.mem_range, forall_exists_index]
+    intro x hx
+    rw [← hx]
+    simp [t, hc]
+  · apply (isOpen_lt (by fun_prop) (by fun_prop)).uniqueDiffOn
+  · exact ht
+  · intro n
+    set C := ∑ k ∈ Finset.range (n + 1), (‖Polynomial.eval (-1) (descPochhammer ℂ k)‖ *
+      (|c| / 2) ^ (-1 - (k : ℤ)))
+    use 0, C, by positivity [C]
+    intro m hmn x hx
+    have hx' : x ≠ 0 := Complex.slitPlane_ne_zero (ht_subset hx)
+    calc
+      _ ≤ ‖Polynomial.eval (-1) (descPochhammer ℂ m)‖ * ‖x ^ (-(1 : ℂ) - m)‖ := by
+        rw [iteratedFDerivWithin_eq_iteratedFDeriv ht_unique (by fun_prop) hx,
+          norm_iteratedFDeriv_eq_norm_iter_deriv _ _ _ (by fun_prop)]
+        rw [Complex.iteratedDeriv_inv _ (ht_subset hx)]
+        simp
+      _ ≤ ‖Polynomial.eval (-1) (descPochhammer ℂ m)‖ * (|c| / 2)  ^ (-(1 : ℤ) - m) := by
+        gcongr
+        suffices (|c| / 2) ^ (m + 1) ≤ ‖x‖ ^ (m + 1) by
+          rw [Complex.cpow_sub (-1) m hx', zpow_sub₀ (by positivity)]
+          simp_rw [div_pow, pow_add] at this
+          simp [Complex.cpow_neg_one, div_pow]
+          field_simp at this ⊢
+          simpa
+        gcongr
+        simp only [Set.mem_ofPred_eq, t] at hx
+        grw [hx]
+        exact Complex.abs_im_le_norm x
+      _ ≤ _ := by
+        simp only [Int.reduceNeg, C, pow_zero, mul_one]
+        have hmn' : m ∈ Finset.range (n + 1) := by simpa using hmn
+        apply Finset.single_le_sum (fun _ _ ↦ by positivity) hmn'
+
+/-- The operator with Fourier multiplier `(c • I + f x)⁻¹`. -/
+def BesselPotentialSpace.defectOp (c C : ℝ) (f : E → ℝ) (hC : 0 < C) (hc : c ≠ 0)
+    (hf : f.HasTemperateGrowth)
+    -- this condition is satisfied if either `s ≤ 0` or `f` is elliptic:
+    (hf' : ∀ x, (1 + ‖x‖ ^ 2) ^ (s / 2) ≤ C * (1 + ‖f x‖))
+    (u : Lp (α := E) F 2) : H^{s}(E, F) :=
+  BesselPotentialSpace.fourierMultiplierCLM 0 s (2 * C * max 1 (|c|⁻¹))
+    (fun x ↦ (c • Complex.I + f x)⁻¹) ?_ ?_ (BesselPotentialSpace.ofLp 0 u)
+where finally
+  · suffices Function.HasTemperateGrowth fun x : ℝ ↦ (c • Complex.I + x)⁻¹ from this.comp hf
+    fun_prop
+  · intro x
+    simp only [Complex.real_smul, norm_inv, zero_sub]
+    have h_pos : 0 < ‖c * Complex.I + (f x)‖ := by
+      rw [norm_pos_iff]
+      apply Complex.slitPlane_ne_zero
+      simp [Complex.mem_slitPlane_iff, hc]
+    suffices (1 + ‖x‖ ^ 2) ^ (s / 2) ≤ (2 * C * max 1 (|c|⁻¹)) * ‖c * Complex.I + (f x)‖ by
+      rw [neg_div 2 s]
+      rw [Real.rpow_neg (by positivity) (s / 2)]
+      field_simp
+      grind
+    calc
+      _ ≤ C * (1 + ‖f x‖) := hf' x
+      _ ≤ C * (max 1 (|c|⁻¹) * (‖c • Complex.I‖ + ‖f x‖)) := by
+        rw [mul_add (max _ _)]
+        gcongr
+        · rw [sup_mul₀ (by positivity)]
+          apply le_sup_of_le_right
+          simp [hc]
+        · rw [sup_mul₀ (by positivity)]
+          refine le_sup_of_le_left ?_
+          simp
+      _ ≤ C * (max 1 (|c|⁻¹) * (2 * ‖c • Complex.I + f x‖)) := by
+        gcongr
+        simp only [Complex.real_smul, Complex.norm_mul, Complex.norm_real, Real.norm_eq_abs,
+          Complex.norm_I, mul_one]
+        rw [two_mul]
+        gcongr
+        · grw [← Complex.abs_im_le_norm]
+          simp
+        · grw [← Complex.abs_re_le_norm]
+          simp
+      _ = (2 * C * max 1 (|c|⁻¹)) * ‖c • Complex.I + f x‖ := by ring
+
+@[simp]
+theorem BesselPotentialSpace.defectOp_toDistr (c C : ℝ) (f : E → ℝ) (hC : 0 < C) (hc : c ≠ 0)
+    (hf : f.HasTemperateGrowth) (hf' : ∀ x, (1 + ‖x‖ ^ 2) ^ (s / 2) ≤ C * (1 + ‖f x‖))
+    (u : Lp (α := E) F 2) : (defectOp c C f hC hc hf hf' u).toDistr =
+    (Lp.toTemperedDistribution u).fourierMultiplierCLM F (fun x ↦ (c • Complex.I + f x)⁻¹) := by
+  simp [defectOp]
+
+open Real
+
+/-- The defect operator for the Laplacian -/
+def BesselPotentialSpace.defectOpLaplacian (c : ℝ) (u : Lp (α := E) F 2)
+    (hc : c ≠ 0 := by positivity) : H^{2}(E, F) :=
+  defectOp c 1 (fun x ↦ -(2 * π) ^ 2 * ‖x‖ ^ 2) ?_ hc ?_ ?_ u
+where finally
+  · positivity
+  · fun_prop
+  · intro x
+    suffices ‖x‖ ^ 2 ≤ (2 * |π|) ^ 2 * |‖x‖| ^ 2 by simpa
+    have : 1 ≤ (2 * π) ^ 2 := by
+      grind [one_le_sq_iff₀, two_le_pi]
+    grw [abs_of_pos (by positivity), ← this]
+    simp
+
+@[simp]
+theorem BesselPotentialSpace.defectOpLaplacian_toDistr (c : ℝ) (u : Lp (α := E) F 2)
+    (hc : c ≠ 0 := by positivity) :
+    (defectOpLaplacian c u).toDistr = (Lp.toTemperedDistribution u).fourierMultiplierCLM F
+      (fun x ↦ (c • Complex.I - (2 * π) ^ 2 * ‖x‖ ^ 2)⁻¹) := by
+  simp [defectOpLaplacian, ← sub_eq_add_neg]
+
+theorem BesselPotentialSpace.defectOpLaplacian_prop (c : ℝ) (u : Lp (α := E) F 2)
+    (hc : c ≠ 0 := by positivity) :
+    ((c • Complex.I) • (ConcreteLinearPMap.laplacian E F).emb (defectOpLaplacian c u) +
+      (ConcreteLinearPMap.laplacian E F).toFun (defectOpLaplacian c u)) = u := by
+  apply Lp.toTemperedDistribution_injective
+  simp_rw [← Lp.toTemperedDistributionCLM_apply]
+  simp only [_root_.map_add, _root_.map_smul]
+  simp only [Lp.toTemperedDistributionCLM_apply,
+    ConcreteLinearPMap.toTemperedDistribution_laplacian_emb, defectOpLaplacian_toDistr,
+    ConcreteLinearPMap.toTemperedDistribution_laplacian_toFun]
+  rw [← _root_.smul_apply]
+  have : Function.HasTemperateGrowth fun x : E ↦ ((c • Complex.I) - (2 * π) ^ 2 * ‖x‖ ^ 2)⁻¹ := by
+    have h₁ : Function.HasTemperateGrowth fun x : ℝ ↦ (c • Complex.I + x)⁻¹ := by fun_prop
+    have h₂ : Function.HasTemperateGrowth fun x : E ↦ -(2 * π) ^ 2 * ‖x‖ ^ 2 := by fun_prop
+    have := h₁.comp h₂
+    convert h₁.comp h₂
+    simp [← sub_eq_add_neg]
+  rw [← TemperedDistribution.fourierMultiplierCLM_smul this]
+  rw [TemperedDistribution.laplacian_eq_fourierMultiplierCLM]
+  rw [TemperedDistribution.fourierMultiplierCLM_fourierMultiplierCLM_apply this (by fun_prop)]
+  rw [← _root_.smul_apply]
+  rw [← Complex.coe_smul (-(2 * π) ^ 2)]
+  rw [← TemperedDistribution.fourierMultiplierCLM_smul (by fun_prop)]
+  rw [← TemperedDistribution.fourierMultiplierCLM_add_apply (by fun_prop) (by fun_prop)]
+  convert DFunLike.ext_iff.mp (TemperedDistribution.fourierMultiplierCLM_const 1) _ with x
+  · simp only [Complex.real_smul, Complex.ofReal_neg, Complex.ofReal_pow, Complex.ofReal_mul,
+      Complex.ofReal_ofNat, neg_smul, Pi.add_apply, Pi.smul_apply, smul_eq_mul, Pi.neg_apply,
+      Pi.mul_apply]
+    have : (c * Complex.I - 2 ^ 2 * π ^ 2 * ‖x‖ ^ 2) ≠ 0 := by
+      rw [ne_eq, Complex.ext_iff, not_and_or, Complex.sub_im]
+      norm_cast
+      simp [hc]
+    field_simp
+    ring
+  · simp
+  · infer_instance
+
+/-- The Laplacian on `ℝ^n` is self-adjoint. -/
+theorem LinearPMap.isSelfAdjoint_laplacian' : IsSelfAdjoint (LinearPMap.laplacian E F) := by
+  apply ConcreteLinearPMap.isSelfAdjoint_toLinearPMap_of_surjective LinearPMap.isSymmetric_laplacian
+    ConcreteLinearPMap.denseRange_laplacian
+  intro u c hc
+  use BesselPotentialSpace.defectOpLaplacian c u
+  simpa [← smul_assoc] using BesselPotentialSpace.defectOpLaplacian_prop c u hc
